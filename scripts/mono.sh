@@ -1,0 +1,10 @@
+LANGUAGE=en OUTPUT_DIR=output/mono/en MODEL_NAME=roberta-base sh scripts/mono.train.sh
+LANGUAGE=de OUTPUT_DIR=output/mono/de MODEL_NAME=deepset/gbert-base sh scripts/mono.train.sh
+LANGUAGE=es OUTPUT_DIR=output/mono/es MODEL_NAME=bertin-project/bertin-roberta-base-spanish sh scripts/mono.train.sh
+LANGUAGE=fr OUTPUT_DIR=output/mono/fr MODEL_NAME=camembert-base sh scripts/mono.train.sh
+LANGUAGE=it OUTPUT_DIR=output/mono/it MODEL_NAME=dbmdz/bert-base-italian-cased sh scripts/mono.train.sh
+LANGUAGE=nl OUTPUT_DIR=output/mono/nl MODEL_NAME=DTAI-KULeuven/robbertje-1-gb-shuffled sh scripts/mono.train.sh
+LANGUAGE=pt OUTPUT_DIR=output/mono/pt MODEL_NAME=neuralmind/bert-base-portuguese-cased sh scripts/mono.train.sh
+LANGUAGE=tr OUTPUT_DIR=output/mono/tr MODEL_NAME=dbmdz/bert-base-turkish-cased sh scripts/mono.train.sh
+LANGUAGE=ru OUTPUT_DIR=output/mono/ru MODEL_NAME=DeepPavlov/rubert-base-cased sh scripts/mono.train.sh
+LANGUAGE=pl OUTPUT_DIR=output/mono/pl MODEL_NAME=dkleczek/bert-base-polish-uncased-v1 sh scripts/mono.train.sh

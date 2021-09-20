@@ -1,0 +1,28 @@
+CUDA_VISIBLE_DEVICES=4,5,6,7 python -m torch.distributed.launch --nproc_per_node=4 train.py \
+    --languages en de es fr it nl pt tr ru pl id no sv da vi fi ro cs he hu hr  \
+    --output_dir output/1024 \
+    --do_train \
+    --per_device_train_batch_size 256 \
+    --per_device_eval_batch_size 256 \
+    --distributed_softmax \
+    --max_steps 3000 \
+    --evaluation_strategy steps \
+    --eval_steps 250 \
+    --max_seq_len 128 \
+    --warmup_steps 1000 \
+    --label_names page_id \
+    --logging_steps 5 \
+    --fp16 \
+    --metric_for_best_model eval_global_mrr \
+    --load_best_model_at_end \
+    --save_total_limit 3 \
+    --report_to tensorboard \
+    --dataloader_num_workers 1 \
+    --single_domain \
+    --hidden_dropout_prob 0.25 \
+    --learning_rate 0.00005 \
+    --weight_decay 0.01 \
+    --alpha 1 \
+    --gradient_checkpointing \
+    --deepspeed config/ds_config_zero_2.json
+     
