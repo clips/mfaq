@@ -11,7 +11,7 @@ pip install datasets
 ```
 
 Then import the dataset:
-```
+```python
 from datasets import load_dataset
 en_dataset = load_dataset("clips/mfaq", "en")
 ```
@@ -26,12 +26,12 @@ pip install sentence-transformers
 ```
 
 Load the model:
-```
+```python
 from sentence_transformers import SentenceTransformer
 ```
 
 Each question must be pre-pended with a `<Q>`, answers with a `<A>`.
-```
+```python
 question = "<Q>How many models can I host on HuggingFace?"
 answers = [
   "<A>All plans come with unlimited private models and datasets.",
