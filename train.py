@@ -14,6 +14,7 @@ from transformers import AutoModel, AutoTokenizer
 from collections import OrderedDict
 from transformers.trainer_utils import get_last_checkpoint
 from deepspeed.utils.zero_to_fp32 import load_state_dict_from_zero_checkpoint
+from accelerate.utils import DistributedType
 
 
 from dataloader import IterableDataset, ValidationDataset
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelArguments:
-    gradient_checkpointing: bool = field(default=False)
+    #gradient_checkpointing: bool = field(default=False)
     hidden_dropout_prob: float = field(default=0.1)
     attention_probs_dropout_prob: float = field(default=0.1)
     model_name_or_path: str = field(default="xlm-roberta-base")
@@ -45,8 +46,8 @@ class DataTrainingArguments:
     single_domain: bool = field(default=False)
     alpha: float = field(default=0.3)
     no_special_token: bool = field(default=False)
-    limit_valid_size: Optional[int] = field(default=None)
-
+    limit_valid_size: Optional[int] = field(default=1000)
+    limit_train_size: Optional[int] = field(default=1000)
 
 @dataclass
 class CustomTrainingArgument(TrainingArguments):
@@ -129,9 +130,9 @@ def main():
         add_pooling_layer=False
     )
 
-    if model_args.gradient_checkpointing:
+    #if model_args.gradient_checkpointing:
         # CANINE does not supporte
-        model_kwargs["gradient_checkpointing"] = True
+    #    model_kwargs["gradient_checkpointing"] = True
 
     model = AutoModel.from_pretrained(
         model_args.model_name_or_path,
@@ -147,14 +148,28 @@ def main():
         additional_special_tokens=None if data_args.no_special_token else ["<Q>", "<A>", "<link>"]
     )
     if not data_args.no_special_token:
-        model.resize_token_embeddings(len(tokenizer))
+        model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=8)
 
     datasets = [load_dataset("clips/mfaq", l) for l in data_args.languages]
+    
+    """if data_args.limit_train_size:
+        train_datasets = [e["train"].select(range(data_args.limit_valid_size)) for e in datasets]  # Limit the training data to 1000 rows
+    else:
+        train_datasets = [e["train"] for e in datasets]
+
+    if data_args.limit_valid_size:
+        eval_datasets = [e["validation"].select(range(data_args.limit_valid_size)) for e in datasets]
+    else:
+        eval_datasets = [e["validation"] for e in datasets]"""
+
     train_datasets = [e["train"] for e in datasets]
     eval_datasets = [e["validation"] for e in datasets]
+
+    if data_args.limit_train_size:
+        train_datasets = [e.select(range(data_args.limit_train_size)) for e in train_datasets]  # Limit the training data to 1000 rows
     if data_args.limit_valid_size:
-        raise
         eval_datasets = [e.select(range(data_args.limit_valid_size)) for e in eval_datasets]
+
     eval_dataset = ValidationDataset(interleave_datasets(eval_datasets))
 
     if training_args.do_train:
@@ -216,6 +231,7 @@ def main():
         compute_metrics=compute_metrics
     )
 
+    training_args.distributed_state.distributed_type = DistributedType.DEEPSPEED
     if training_args.do_train:
         train_result = trainer.train()
         metrics = train_result.metrics
