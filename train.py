@@ -12,6 +12,7 @@ from transformers import set_seed, EarlyStoppingCallback
 from transformers import Trainer, TrainingArguments, HfArgumentParser
 from transformers import AutoModel, AutoTokenizer
 from collections import OrderedDict
+import torch.nn as nn
 from transformers.trainer_utils import get_last_checkpoint
 from deepspeed.utils.zero_to_fp32 import load_state_dict_from_zero_checkpoint
 from accelerate.utils import DistributedType
@@ -73,31 +74,37 @@ def mean_pooling(model_output, attention_mask):
     sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
     return sum_embeddings / sum_mask
 
+class TripletLoss(nn.Module):
+    def __init__(self, margin=1.0):
+        super(TripletLoss, self).__init__()
+        self.margin = margin
+
+    def forward(self, anchor, positive, negative):
+        distance_positive = (anchor - positive).pow(2).sum(1)
+        distance_negative = (anchor - negative).pow(2).sum(1)
+        losses = nn.functional.relu(distance_positive - distance_negative + self.margin)
+        return losses.mean()
 
 class CustomTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
         page_id = inputs.pop("page_id", None)
         outputs = model(**inputs)
         sentence_embeddings = mean_pooling(outputs, inputs['attention_mask'])
-        q_logits, a_logits = torch.chunk(sentence_embeddings, 2)
+        q_embeddings, a_embeddings = torch.chunk(sentence_embeddings, 2)
         if self.args.distributed_softmax and self.args.local_rank != -1 and return_outputs is False:
-            q_logits, a_logits = distributed_softmax(
-                q_logits, a_logits, self.args.local_rank, self.args.world_size
+            q_embeddings, a_embeddings = distributed_softmax(
+                q_embeddings, a_embeddings, self.args.local_rank, self.args.world_size
             )
-            labels = torch.arange(q_logits.size(0), device=a_logits.device)
-        cross_entropy = torch.nn.CrossEntropyLoss()
-        dp = q_logits.mm(a_logits.transpose(0, 1))
-        labels = torch.arange(dp.size(0), device=dp.device)
-        loss = cross_entropy(dp, labels)
+            labels = torch.arange(q_embeddings.size(0), device=a_embeddings.device)
+        triplet_loss = TripletLoss(margin=1.0)
+        loss = triplet_loss(q_embeddings, a_embeddings, labels)
         if return_outputs:
-            outputs = OrderedDict({"q_logits": q_logits, "a_logits": a_logits, "page_id": page_id})
+            outputs = OrderedDict({"q_embeddings": q_embeddings, "a_embeddings": a_embeddings, "page_id": page_id})
         return (loss, outputs) if return_outputs else loss
 
 
-def get_acc_rr(q_logits, a_logits):
-    q_logits = torch.from_numpy(q_logits)
-    a_logits = torch.from_numpy(a_logits)
-    dp = q_logits.mm(a_logits.transpose(0, 1))
+def get_acc_rr(q_embeddings, a_embeddings):
+    dp = q_embeddings.mm(a_embeddings.transpose(0, 1))
     indices = torch.argsort(dp, dim=-1, descending=True)
     targets = torch.arange(indices.size(0), device=indices.device).view(-1, 1)
     targets = targets.expand_as(indices)
@@ -203,14 +210,14 @@ def main():
         return output
 
     def compute_metrics(predictions):
-        q_output, a_output, page_id = predictions.predictions
+        q_embeddings, a_embeddings, page_id = predictions.predictions
         unique_page_ids = set(page_id.tolist())
         global_rr, global_acc, pp_mrr, pp_acc = [], [], [], []
         for unique_page_id in unique_page_ids:
             selector = page_id == unique_page_id
-            s_q_output = q_output[selector, :]
-            s_a_output = a_output[selector, :]
-            rr, acc = get_acc_rr(s_q_output, s_a_output)
+            s_q_embeddings = q_embeddings[selector, :]
+            s_a_embeddings = a_embeddings[selector, :]
+            rr, acc = get_acc_rr(s_q_embeddings, s_a_embeddings)
             global_rr.append(rr)
             global_acc.append(acc)
             pp_mrr.append(rr.mean())
