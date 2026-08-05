@@ -1,3 +1,10 @@
+# WARNING: This repository is no longer maintained.
+
+This project is archived and will not receive further updates, bug fixes, or security patches. Issues and pull requests may not be reviewed.
+
+Use this software at your own risk.
+__________________________________________________
+
 # MFAQ: a Multilingual FAQ Dataset
 
 MFAQ is a multilingual FAQ retrieval dataset. We also release a multilingual FAQ retrieval model trained on this dataset.
